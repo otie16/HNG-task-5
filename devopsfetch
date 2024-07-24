@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Function to display active ports and services
+display_ports() {
+    if [ -z "$1" ]; then
+        echo "Active Ports and Services:"
+        sudo netstat -tuln | awk 'NR>2 {print $4 " " $7}' | column -t
+    else
+        echo "Details for Port $1:"
+        sudo netstat -tulnp | grep ":$1" | awk '{print $4 " " $7}' | column -t
+    fi
+}
+
+# Function to display Docker images and containers
+display_docker() {
+    if [ -z "$1" ]; then
+        echo "Docker Images:"
+        sudo docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}"
+        echo ""
+        echo "Docker Containers:"
+        sudo docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+    else
+        echo "Details for Docker Container $1:"
+        sudo docker inspect "$1" | jq '.[] | {Name: .Name, Image: .Config.Image, State: .State, Mounts: .Mounts}'
+    fi
+}
+
+# Function to display Nginx domains and ports
+display_nginx() {
+    if [ -z "$1" ]; then
+        echo "Nginx Domains and Ports:"
+        sudo nginx -T 2>/dev/null | grep -E 'server_name|listen' | awk '{print $2}' | paste - - | column -t
+    else
+        echo "Details for Nginx Domain $1:"
+        sudo nginx -T 2>/dev/null | awk '/server_name '"$1"'/{flag=1;next}/server/{flag=0}flag' | column -t
+    fi
+}
+
+# Function to display users and last login times
+display_users() {
+    if [ -z "$1" ]; then
+        echo "Users and Last Login Times:"
+        lastlog | tail -n +2 | awk '{print $1 " " $4 " " $5 " " $6 " " $7}' | column -t
+    else
+        echo "Details for User $1:"
+        lastlog | grep "^$1" | awk '{print $1 " " $4 " " $5 " " $6 " " $7}' | column -t
+    fi
+}
+
+# Function to display activities within a specified time range
+display_time_range() {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        echo "Usage: devopsfetch -t <start_time> <end_time>"
+        echo "Example: devopsfetch -t '2024-01-01 00:00:00' '2024-01-01 23:59:59'"
+        exit 1
+    fi
+
+    start_time=$1
+    end_time=$2
+
+    echo "Activities from $start_time to $end_time:"
+    sudo journalctl --since="$start_time" --until="$end_time" | tail -n +2 | column -t
+}
+
+# Function to display help message
+display_help() {
+    echo "Usage: devopsfetch [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -p, --port [PORT]         Display all active ports and services, or details for a specific port"
+    echo "  -d, --docker [CONTAINER]  List all Docker images and containers, or details for a specific container"
+    echo "  -n, --nginx [DOMAIN]      Display all Nginx domains and their ports, or details for a specific domain"
+    echo "  -u, --users [USERNAME]    List all users and their last login times, or details for a specific user"
+    echo "  -t, --time START END      Display activities within a specified time range"
+    echo "  -h, --help                Display this help message"
+}
+
+# Parsing command-line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -p|--port)
+            shift
+            display_ports "$1"
+            exit 0
+            ;;
+        -d|--docker)
+            shift
+            display_docker "$1"
+            exit 0
+            ;;
+        -n|--nginx)
+            shift
+            display_nginx "$1"
+            exit 0
+            ;;
+        -u|--users)
+            shift
+            display_users "$1"
+            exit 0
+            ;;
+        -t|--time)
+            shift
+            display_time_range "$1" "$2"
+            exit 0
+            ;;
+        -h|--help)
+            display_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            display_help
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+display_help

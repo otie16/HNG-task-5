@@ -1,0 +1,9 @@
+[Unit]
+Description=DevOpsFetch Service
+
+[Service]
+ExecStart=/usr/local/bin/devopsfetch -p
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
